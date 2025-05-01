@@ -90,6 +90,9 @@ The program shall be executed via the command line and accept the following argu
 ## 5. Technical Requirements & Considerations
 
 * **Language:** Python 3.x
+* **Code:**
+    * `segmenter.py`: The main file.
+    * `segmenter_test.py`: File for all unit tests.
 * **Libraries:**
     * `argparse`: For CLI argument parsing.
     * `json`: For JSON reading and writing.
