@@ -6,6 +6,9 @@ A Python tool to process Google Maps Timeline data (`Timeline.json`), filter out
 
 This tool is useful for analyzing travel patterns, isolating specific journeys, or preparing timeline data for further processing or visualization by focusing on periods spent away from your usual locations.
 
+You can look at the result:
+https://timelineviewer.pages.dev/
+
 ## Features
 
 * **Command-Line Interface:** Easy configuration via CLI arguments.
