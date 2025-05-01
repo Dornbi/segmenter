@@ -65,6 +65,25 @@ SAMPLE_SEGMENT_MIXED = {
      "timelinePath": [ {"point": "40.7128°, -74.0060°"}, {"point": "40.7580°, -73.9855°"} ]
 }
 
+
+def flexible_mock_tqdm(*args, **kwargs):
+    """Mocks tqdm to handle both iterable and non-iterable usage."""
+    if args and hasattr(args[0], '__iter__'): # Check if the first arg is likely an iterable
+        # If tqdm is wrapping an iterable (e.g., for loop)
+        return args[0] # Return the iterable itself
+    else:
+        # If tqdm is used manually (e.g., tqdm(total=...))
+        mock_bar = MagicMock()
+        # Mock methods called in the code: update, close, set_postfix_str
+        # These methods will now exist on the returned mock object but do nothing.
+        mock_bar.update = MagicMock()
+        mock_bar.close = MagicMock()
+        mock_bar.set_postfix_str = MagicMock()
+        # Make the mock object itself iterable in case it's used unexpectedly
+        mock_bar.__iter__ = MagicMock(return_value=iter([])) # Empty iterator
+        return mock_bar
+
+
 class TestTimelineSegmenter(unittest.TestCase):
 
     def test_parse_datetime_utc(self):
@@ -341,7 +360,7 @@ class TestTimelineSegmenter(unittest.TestCase):
     @patch('segmenter.load_geocache')
     @patch('segmenter.save_geocache')
     @patch('segmenter.Nominatim') # Mock geolocator init
-    @patch('segmenter.tqdm', lambda x, **kwargs: x) # Disable tqdm for tests
+    @patch('segmenter.tqdm', flexible_mock_tqdm) # Use the new flexible mock
     def test_process_timeline_integration(self, MockNominatim, mock_save_cache, mock_load_cache,
                                           mock_is_near, mock_parse_dates, mock_parse_homes,
                                           mock_json_dump, mock_json_load, mock_open_func,
