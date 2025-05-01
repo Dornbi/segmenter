@@ -33,3 +33,87 @@ The program:
 - Consecutive days, when there location is outside of the home cities, are grouped together to form a "segment".
 
 - Each segment is written into the output directory in the same Json format as the input. The name of each output file is "Timeline.start_date.end_date.json".
+
+This is the beginning of the Timeline.json file for reference:
+
+{
+  "semanticSegments": [
+    {
+      "startTime": "2009-11-11T13:00:00.000+01:00",
+      "endTime": "2009-11-11T15:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.365187°, 8.524766°",
+          "time": "2009-11-11T13:28:00.000+01:00"
+        }
+      ]
+    },
+    {
+      "startTime": "2009-11-11T13:28:29.000+01:00",
+      "endTime": "2009-11-11T16:51:09.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.47999998927116394,
+        "topCandidate": {
+          "placeId": "ChIJsecE_fYJkEcRGdMMY4AF3ko",
+          "semanticType": "WORK",
+          "probability": 0.9956839084625244,
+          "placeLocation": {
+            "latLng": "47.3653259°, 8.5247697°"
+          }
+        }
+      }
+    },
+    {
+      "startTime": "2009-11-11T15:00:00.000+01:00",
+      "endTime": "2009-11-11T17:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.365187°, 8.524766°",
+          "time": "2009-11-11T16:51:00.000+01:00"
+        }
+      ]
+    },
+    {
+      "startTime": "2009-11-11T16:51:09.000+01:00",
+      "endTime": "2009-11-12T00:13:11.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "activity": {
+        "start": {
+          "latLng": "47.3649775°, 8.52435°"
+        },
+        "end": {
+          "latLng": "47.3026925°, 8.5286375°"
+        },
+        "distanceMeters": 6933.31982421875,
+        "topCandidate": {
+          "type": "UNKNOWN_ACTIVITY_TYPE",
+          "probability": 0.0
+        }
+      }
+    },
+    {
+      "startTime": "2009-11-11T17:00:00.000+01:00",
+      "endTime": "2009-11-11T19:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.366788°, 8.523365°",
+          "time": "2009-11-11T17:37:00.000+01:00"
+        },
+        {
+          "point": "47.370224°, 8.523996°",
+          "time": "2009-11-11T18:32:00.000+01:00"
+        },
+        {
+          "point": "47.321349°, 8.520679°",
+          "time": "2009-11-11T18:42:00.000+01:00"
+        },
+        {
+          "point": "47.302728°, 8.528617°",
+          "time": "2009-11-11T18:51:00.000+01:00"
+        }
+      ]
+    },
