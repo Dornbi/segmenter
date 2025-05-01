@@ -1,0 +1,35 @@
+I have downloaded a Timeline.json file from Google Maps. It covers several years of location history, and is about 60 Megabytes.
+
+
+
+Write me a PRD document for a Python program in .md format. I am planning to use this later to write the program itself. The program reads the single Timeline.json file, and breaks it up into segments.
+
+
+
+Parameters are passed as flags:
+
+- Required: path of the Timeline.json file.
+
+- Required: a list of "home" cities. This can be lat/long, but if there is a more descriptive way to specify it (for example by city name+country), that is a plus. Optionally for each location, one can specify a radius around the location. If omitted, the default radius is 10km.
+
+- Optional: start / end date as yyyy-mm-dd format.
+
+- Optional: The start and end date can be also set from a single, different flag, which takes yyyy or yyyy-mm or yyyy-mm-dd as input.
+
+- Required: Output directory.
+
+
+
+The program:
+
+- Reads the Timeline.json from the given path, and iterates through it day by day.
+
+- If a start date was given, it ignores all days before the start date.
+
+- If an end date was given, it ignores all days after the end date.
+
+- Days, where the location stays within the given radius around any of the home cities, are ignored.
+
+- Consecutive days, when there location is outside of the home cities, are grouped together to form a "segment".
+
+- Each segment is written into the output directory in the same Json format as the input. The name of each output file is "Timeline.start_date.end_date.json".
