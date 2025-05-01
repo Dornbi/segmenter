@@ -31,20 +31,21 @@ This document describes the requirements for a Python program designed to proces
 
 The program shall be executed via the command line and accept the following arguments (flags):
 
-* `--input-file <path>`: **Required**. Specifies the path to the input `Timeline.json` file.
-* `--home-locations <spec1[;spec2;...]>`: **Required**. A semicolon-separated list defining home locations. Each `<spec>` can be:
-    * `city,country[:radius_km]`: e.g., `"Zurich,Switzerland:15"` or `"Paris,France"`
+* `--input <path>`: **Required**. Specifies the path to the input `Timeline.json` file.
+* `--homeloc <spec1[;spec2;...]>`: **Required**. A semicolon-separated list defining home locations. Each `<spec>` can be:
+    * `city,country-code[:radius_km]`: e.g., `"Zurich,CH:15"` or `"Paris,FR"`
     * `latitude,longitude[:radius_km]`: e.g., `"47.3769,8.5417:20"` or `"40.7128,-74.0060"`
-    * If `:radius_km` is omitted, a default radius of **10 km** will be used for that location.
+    * If `:radius_km` is omitted, the value from `--radius` will be used for that location.
     * The program must resolve `city,country` specifications to latitude/longitude coordinates using a geocoding service.
-* `--start-date <YYYY-MM-DD>`: **Optional**. Specifies the inclusive start date for processing. If omitted, processing starts from the earliest record in the file.
-* `--end-date <YYYY-MM-DD>`: **Optional**. Specifies the inclusive end date for processing. If omitted, processing continues to the latest record in the file.
-* `--date-filter <YYYY|YYYY-MM|YYYY-MM-DD>`: **Optional**. A single flag to set both start and end date implicitly:
+* `--radius`: **Required**. The default radius in km. Default is **10 km**.
+* `--start <YYYY-MM-DD>`: **Optional**. Specifies the inclusive start date for processing. If omitted, processing starts from the earliest record in the file.
+* `--end <YYYY-MM-DD>`: **Optional**. Specifies the inclusive end date for processing. If omitted, processing continues to the latest record in the file.
+* `--date <YYYY|YYYY-MM|YYYY-MM-DD>`: **Optional**. A single flag to set both start and end date implicitly:
     * `YYYY`: Sets start date to `YYYY-01-01` and end date to `YYYY-12-31`.
     * `YYYY-MM`: Sets start date to `YYYY-MM-01` and end date to the last day of `YYYY-MM`.
     * `YYYY-MM-DD`: Sets start date and end date to this specific day.
-    * **Precedence:** If `--start-date` or `--end-date` are provided, they **override** any dates derived from `--date-filter`.
-* `--output-dir <path>`: **Required**. Specifies the path to the directory where the output segment JSON files will be saved. The directory will be created if it doesn't exist.
+    * **Precedence:** If `--start-date` or `--end-date` are provided, they **override** any dates derived from `--date`.
+* `--outputdir <path>`: **Required**. Specifies the path to the directory where the output segment JSON files will be saved. The directory will be created if it doesn't exist.
 
 ### 4.2. Input File Processing
 
@@ -61,12 +62,13 @@ The program shall be executed via the command line and accept the following argu
 ### 4.4. Home Location Filtering
 
 * **Geocoding:** For each home location specified as `city,country`, the program must use a geocoding service (e.g., using a library like `geopy`) to obtain its latitude and longitude. Handle potential errors during geocoding (e.g., network issues, ambiguous names).
+    * Prefer geocoding services which are free to use and do not require an API key or registration, for example Nominatim or Photon.
 * **Daily Location Check:** The program must process the timeline data day by day within the filtered date range. For each day:
     * Extract all geographic coordinates (`latitude, longitude`) recorded within that day. These can be found in various fields within `semanticSegments`, including `timelinePath[*].point`, `visit.placeLocation.latLng`, `activity.start.latLng`, `activity.end.latLng`, etc.
     * For each extracted point, calculate the Haversine distance to *each* specified home location's center.
     * A day is considered a "Home Day" if **all** recorded location points for that day fall **within** the specified radius of **at least one** of the home locations.
     * A day is considered an "Away Day" if **at least one** recorded location point falls **outside** the specified radii of **all** home locations.
-    * Days with no identifiable location points should be treated consistently (e.g., ignored, or treated as "Home Days" - specify the chosen behavior. Default: Treat as "Home Day").
+    * Days with no identifiable location points should be ignored.
 * The program must filter out and ignore all data corresponding to "Home Days".
 
 ### 4.5. Segment Identification
@@ -82,7 +84,7 @@ The program shall be executed via the command line and accept the following argu
     * Collect *all* original `semanticSegments` entries from the input file whose `startTime` falls between the segment's start date (inclusive, 00:00:00) and end date (inclusive, 23:59:59).
     * Construct a new JSON object with a single top-level key `semanticSegments`, whose value is an array containing the collected segments for this trip. The structure should mirror the input `Timeline.json` format, but only contain data relevant to this specific segment.
     * Define the output filename as `Timeline.<start_date>.<end_date>.json` (e.g., `Timeline.2023-08-15.2023-08-22.json`).
-    * Save this JSON object to a file with the generated name inside the directory specified by `--output-dir`.
+    * Save this JSON object to a file with the generated name inside the directory specified by `--outputdir`.
     * Ensure the output directory exists; create it if necessary. Handle potential file writing errors (e.g., permissions).
 
 ## 5. Technical Requirements & Considerations
@@ -104,11 +106,113 @@ The program shall be executed via the command line and accept the following argu
     * Missing coordinate data within `semanticSegments`.
 * **Timezones:** Acknowledge the presence of timezone information (`+HH:MM` offsets or `startTimeTimezoneUtcOffsetMinutes`) in the source data. Ensure date boundaries and filtering logic are consistent. Converting relevant timestamps to UTC for daily grouping is recommended for accuracy.
 * **Logging:** Provide informative console output regarding progress (e.g., file being processed, dates being filtered, number of segments found) and any errors encountered.
+* **Progress reporting:** Use tqdm. The progress bar shows the days processed, and additional text info shows the number of segments written to `--outputdir`.
+* **Unit tests:** A single unit test file that covers the core logic (date filtering, distance calculation, segment identification).
+* **Geocoding caching:** Previously located cities are stored in a geocache.json file. This is read for each invocation, and kept up to date with newly fetched cities, to improve performance and reduce reliance on external services for repeated runs with the same home locations.
 
 ## 6. Open Questions / Future Considerations
 
-* Confirm the precise handling strategy for days with no location data points (Treat as Home? Ignore?).
-* Implement geocoding caching to improve performance and reduce reliance on external services for repeated runs with the same home locations.
-* Add more detailed progress reporting, especially for large files.
-* Consider adding unit tests for core logic (date filtering, distance calculation, segment identification).
 * Option to define a minimum duration for a segment to be considered valid (e.g., ignore 1-day "away" periods).
+
+
+## Example Timeline.json
+
+The first lines of sample Timeline.json:
+
+```
+{
+  "semanticSegments": [
+    {
+      "startTime": "2009-11-11T13:00:00.000+01:00",
+      "endTime": "2009-11-11T15:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.365187°, 8.524766°",
+          "time": "2009-11-11T13:28:00.000+01:00"
+        }
+      ]
+    },
+    {
+      "startTime": "2009-11-11T13:28:29.000+01:00",
+      "endTime": "2009-11-11T16:51:09.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.47999998927116394,
+        "topCandidate": {
+          "placeId": "ChIJsecE_fYJkEcRGdMMY4AF3ko",
+          "semanticType": "WORK",
+          "probability": 0.9956839084625244,
+          "placeLocation": {
+            "latLng": "47.3653259°, 8.5247697°"
+          }
+        }
+      }
+    },
+    {
+      "startTime": "2009-11-11T15:00:00.000+01:00",
+      "endTime": "2009-11-11T17:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.365187°, 8.524766°",
+          "time": "2009-11-11T16:51:00.000+01:00"
+        }
+      ]
+    },
+    {
+      "startTime": "2009-11-11T16:51:09.000+01:00",
+      "endTime": "2009-11-12T00:13:11.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "activity": {
+        "start": {
+          "latLng": "47.3649775°, 8.52435°"
+        },
+        "end": {
+          "latLng": "47.3026925°, 8.5286375°"
+        },
+        "distanceMeters": 6933.31982421875,
+        "topCandidate": {
+          "type": "UNKNOWN_ACTIVITY_TYPE",
+          "probability": 0.0
+        }
+      }
+    },
+    {
+      "startTime": "2009-11-11T17:00:00.000+01:00",
+      "endTime": "2009-11-11T19:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.366788°, 8.523365°",
+          "time": "2009-11-11T17:37:00.000+01:00"
+        },
+        {
+          "point": "47.370224°, 8.523996°",
+          "time": "2009-11-11T18:32:00.000+01:00"
+        },
+        {
+          "point": "47.321349°, 8.520679°",
+          "time": "2009-11-11T18:42:00.000+01:00"
+        },
+        {
+          "point": "47.302728°, 8.528617°",
+          "time": "2009-11-11T18:51:00.000+01:00"
+        }
+      ]
+    },
+    {
+      "startTime": "2009-11-11T21:00:00.000+01:00",
+      "endTime": "2009-11-11T23:00:00.000+01:00",
+      "timelinePath": [
+        {
+          "point": "47.303349°, 8.524562°",
+          "time": "2009-11-11T21:09:00.000+01:00"
+        },
+        {
+          "point": "47.302728°, 8.528617°",
+          "time": "2009-11-11T21:55:00.000+01:00"
+        }
+      ]
+    },
+```
