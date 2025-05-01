@@ -139,7 +139,7 @@ class TestTimelineSegmenter(unittest.TestCase):
     @patch('segmenter.Nominatim')
     def test_geocode_location(self, MockNominatim):
         mock_geolocator = MockNominatim.return_value
-        mock_location = Location("Zurich, CH", (47.3769, 8.5417, 0.0)) # lat, lon, alt
+        mock_location = Location(address="Zurich, CH", point=(47.3769, 8.5417, 0.0), raw={}) # lat, lon, alt
         mock_geolocator.geocode.return_value = mock_location
         cache = {}
 
@@ -168,7 +168,7 @@ class TestTimelineSegmenter(unittest.TestCase):
         mock_geolocator.geocode.reset_mock()
         cache = {}
         result = geocode_location("Paris,FR:15.5", 10.0, mock_geolocator, cache)
-        mock_location_paris = Location("Paris, FR", (48.8566, 2.3522, 0.0))
+        mock_location_paris = Location(address="Paris, FR", point=(48.8566, 2.3522, 0.0), raw={})
         mock_geolocator.geocode.return_value = mock_location_paris
         self.assertEqual(result, (48.8566, 2.3522, 15.5))
         mock_geolocator.geocode.assert_called_once_with("Paris,FR", exactly_one=True, timeout=10)
