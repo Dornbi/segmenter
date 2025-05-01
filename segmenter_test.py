@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open, call
 import json
 import os
+import logging
 from datetime import date, datetime, timezone, timedelta
 from segmenter import (
     parse_datetime_utc, parse_lat_lng, get_coordinates_from_segment,
@@ -158,81 +159,104 @@ class TestTimelineSegmenter(unittest.TestCase):
     @patch('segmenter.Nominatim')
     def test_geocode_location(self, MockNominatim):
         mock_geolocator = MockNominatim.return_value
-        mock_location = Location(address="Zurich, CH", point=(47.3769, 8.5417, 0.0), raw={}) # lat, lon, alt
-        mock_geolocator.geocode.return_value = mock_location
-        cache = {}
+        # Define reusable mock locations with corrected 'raw' dict
+        mock_location_zurich = Location(address="Zurich, CH", point=(47.3769, 8.5417, 0.0), raw={'lat': 47.3769, 'lon': 8.5417})
+        mock_location_paris = Location(address="Paris, FR", point=(48.8566, 2.3522, 0.0), raw={'lat': 48.8566, 'lon': 2.3522})
+
+        # Shared cache for tests that depend on previous state (1, 2, 7, 9)
+        shared_cache = {}
+
+        # --- Test Scenarios ---
 
         # 1. City, Country - Cache Miss
-        result = geocode_location("Zurich,CH", 10.0, mock_geolocator, cache)
+        mock_geolocator.geocode.reset_mock() # Reset call history
+        mock_geolocator.geocode.side_effect = None # Ensure no side effect active
+        mock_geolocator.geocode.return_value = mock_location_zurich # Set return value
+        result = geocode_location("Zurich,CH", 10.0, mock_geolocator, shared_cache)
         self.assertEqual(result, (47.3769, 8.5417, 10.0))
         mock_geolocator.geocode.assert_called_once_with("Zurich,CH", exactly_one=True, timeout=10)
-        self.assertIn("zurich,ch", cache)
-        self.assertEqual(cache["zurich,ch"], (47.3769, 8.5417))
+        self.assertIn("zurich,ch", shared_cache) # Normalized key
+        self.assertEqual(shared_cache["zurich,ch"], (47.3769, 8.5417))
 
-        # 2. City, Country - Cache Hit
-        mock_geolocator.geocode.reset_mock()
-        result = geocode_location(" ZURICH , ch ", 10.0, mock_geolocator, cache) # Test trimming/case
+        # 2. City, Country - Cache Hit (Uses shared_cache from #1)
+        mock_geolocator.geocode.reset_mock() # Reset call history
+        # No need to set return_value, should hit cache
+        result = geocode_location(" ZURICH , ch ", 10.0, mock_geolocator, shared_cache) # Test trimming/case
         self.assertEqual(result, (47.3769, 8.5417, 10.0))
         mock_geolocator.geocode.assert_not_called() # Should use cache
 
-        # 3. Lat, Lon - No Geocoding
+        # 3. Lat, Lon - No Geocoding (Independent test)
         mock_geolocator.geocode.reset_mock()
-        cache = {}
-        result = geocode_location("40.7128, -74.0060", 10.0, mock_geolocator, cache)
+        fresh_cache_3 = {} # Use fresh cache for isolation
+        result = geocode_location("40.7128, -74.0060", 10.0, mock_geolocator, fresh_cache_3)
         self.assertEqual(result, (40.7128, -74.0060, 10.0))
         mock_geolocator.geocode.assert_not_called()
-        self.assertEqual(cache, {}) # Cache not used for lat/lon
+        self.assertEqual(fresh_cache_3, {}) # Cache not used for lat/lon
 
-        # 4. City, Country with Radius Override
+        # 4. City, Country with Radius Override (Independent test)
         mock_geolocator.geocode.reset_mock()
-        cache = {}
-        result = geocode_location("Paris,FR:15.5", 10.0, mock_geolocator, cache)
-        mock_location_paris = Location(address="Paris, FR", point=(48.8566, 2.3522, 0.0), raw={})
+        mock_geolocator.geocode.side_effect = None # Ensure no lingering side effect
+        # --- Correction: Set return_value BEFORE calling ---
         mock_geolocator.geocode.return_value = mock_location_paris
+        fresh_cache_4 = {} # Use fresh cache for isolation
+        result = geocode_location("Paris,FR:15.5", 10.0, mock_geolocator, fresh_cache_4)
+        # --- End Correction ---
         self.assertEqual(result, (48.8566, 2.3522, 15.5))
         mock_geolocator.geocode.assert_called_once_with("Paris,FR", exactly_one=True, timeout=10)
-        self.assertIn("paris,fr", cache)
+        self.assertIn("paris,fr", fresh_cache_4) # Normalized key
 
-        # 5. Lat, Lon with Radius Override
+        # 5. Lat, Lon with Radius Override (Independent test)
         mock_geolocator.geocode.reset_mock()
-        cache = {}
-        result = geocode_location(" 51.5, -0.1 : 5 ", 10.0, mock_geolocator, cache)
+        fresh_cache_5 = {} # Use fresh cache
+        result = geocode_location(" 51.5, -0.1 : 5 ", 10.0, mock_geolocator, fresh_cache_5)
         self.assertEqual(result, (51.5, -0.1, 5.0))
         mock_geolocator.geocode.assert_not_called()
+        self.assertEqual(fresh_cache_5, {}) # Cache not used
 
-        # 6. Geocoding Fails (Not Found)
+        # 6. Geocoding Fails (Not Found) (Independent test)
         mock_geolocator.geocode.reset_mock()
-        mock_geolocator.geocode.return_value = None
-        cache = {}
-        result = geocode_location("NonExistentPlace,XY", 10.0, mock_geolocator, cache)
+        mock_geolocator.geocode.side_effect = None
+        mock_geolocator.geocode.return_value = None # Simulate not found
+        fresh_cache_6 = {} # Use fresh cache
+        result = geocode_location("NonExistentPlace,XY", 10.0, mock_geolocator, fresh_cache_6)
         self.assertIsNone(result)
         mock_geolocator.geocode.assert_called_once_with("NonExistentPlace,XY", exactly_one=True, timeout=10)
-        self.assertNotIn("nonexistentplace,xy", cache) # Don't cache failures
+        # Ensure normalized key isn't added on failure
+        self.assertNotIn("nonexistentplace,xy", fresh_cache_6)
 
-        # 7. Geocoding Fails (Timeout with Retries)
+        # 7. Geocoding Fails (Timeout with Retries) (Uses shared_cache)
         mock_geolocator.geocode.reset_mock()
-        mock_geolocator.geocode.side_effect = [GeocoderTimedOut, GeocoderTimedOut, mock_location]
+        # Set side effect for timeout/retry, eventually returning Zurich
+        mock_geolocator.geocode.side_effect = [GeocoderTimedOut, GeocoderTimedOut, mock_location_zurich]
+        # Clear return_value explicitly as side_effect is used
+        mock_geolocator.geocode.return_value = None
         with patch('time.sleep', return_value=None): # Mock sleep to speed up test
-             result = geocode_location("TimeoutCity,TC", 10.0, mock_geolocator, cache)
-        self.assertEqual(result, (47.3769, 8.5417, 10.0)) # Should succeed on 3rd try
+             result = geocode_location("TimeoutCity,TC", 10.0, mock_geolocator, shared_cache)
+        self.assertEqual(result, (47.3769, 8.5417, 10.0)) # Should succeed on 3rd try with Zurich data
         self.assertEqual(mock_geolocator.geocode.call_count, 3)
-        self.assertIn("timeoutcity,tc", cache)
+        self.assertIn("timeoutcity,tc", shared_cache) # Check cache updated (normalized key)
 
-        # 8. Geocoding Fails (Service Error)
+        # 8. Geocoding Fails (Service Error) (Independent test)
         mock_geolocator.geocode.reset_mock()
-        mock_geolocator.geocode.side_effect = GeocoderServiceError
-        result = geocode_location("ServiceErrorCity,SC", 10.0, mock_geolocator, cache)
+        mock_geolocator.geocode.side_effect = GeocoderServiceError # Set error side effect
+        # Clear return_value explicitly
+        mock_geolocator.geocode.return_value = None
+        fresh_cache_8 = {} # Use fresh cache
+        result = geocode_location("ServiceErrorCity,SC", 10.0, mock_geolocator, fresh_cache_8)
         self.assertIsNone(result)
         self.assertEqual(mock_geolocator.geocode.call_count, 1) # Should not retry service error
+        self.assertNotIn("serviceerrorcity,sc", fresh_cache_8) # Cache not updated
 
-        # 9. Invalid radius format
+        # 9. Invalid radius format (Uses shared_cache)
         mock_geolocator.geocode.reset_mock()
-        mock_geolocator.geocode.return_value = mock_location
-        result = geocode_location("Zurich,CH:abc", 10.0, mock_geolocator, cache)
-        # Should still geocode location but use default radius
+        mock_geolocator.geocode.side_effect = None # Clear side effect from #8
+        mock_geolocator.geocode.return_value = mock_location_zurich # Set return value to Zurich
+        result = geocode_location("Zurich,CH:abc", 10.0, mock_geolocator, shared_cache)
+        # Should still geocode location (using mock) but use default radius
         self.assertEqual(result, (47.3769, 8.5417, 10.0))
         mock_geolocator.geocode.assert_called_once_with("Zurich,CH:abc", exactly_one=True, timeout=10) # Uses full string if radius parse fails
-
+        # Check cache was updated with this specific key
+        self.assertIn("zurich,ch:abc", shared_cache)
 
     @patch('segmenter.geocode_location')
     def test_parse_home_locations(self, mock_geocode):

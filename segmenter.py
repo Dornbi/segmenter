@@ -178,11 +178,15 @@ def geocode_location(spec, default_radius_km, geolocator, cache):
 
     # Assume city,country format and geocode
     query = location_part # Use the potentially radius-stripped part
-    cache_key = query.lower() # Case-insensitive cache lookup
-
-    if cache_key in cache:
-        logger.info(f"Using cached location for '{query}': {cache[cache_key]}")
-        lat, lon = cache[cache_key]
+    # Normalize the query for cache key consistency (remove spaces, lower case)
+    # This helps match keys derived from "Zurich,CH" and " ZURICH , ch "
+    normalized_query_key = query.replace(' ', '').lower()
+    
+    # Use the normalized key for cache lookup
+    if normalized_query_key in cache:
+        # logger.info(f"Using cached location for '{query}': {cache[normalized_query_key]}") # Original log used query
+        logger.info(f"Using cached location for '{query}' (key='{normalized_query_key}'): {cache[normalized_query_key]}") # Log includes key
+        lat, lon = cache[normalized_query_key]
         return lat, lon, radius
 
     logger.info(f"Geocoding '{query}'...")
@@ -194,7 +198,7 @@ def geocode_location(spec, default_radius_km, geolocator, cache):
                 if location:
                     lat, lon = location.latitude, location.longitude
                     logger.info(f"Geocoded '{query}' to: ({lat}, {lon}) with radius {radius} km.")
-                    cache[cache_key] = (lat, lon) # Update cache
+                    cache[normalized_query_key] = (lat, lon) # Update cache
                     return lat, lon, radius
                 else:
                     logger.error(f"Could not geocode '{query}'. Location not found.")
